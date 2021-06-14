@@ -1,0 +1,159 @@
+comment {
+	This model takes into account perceived susceptibility, perceived seriousness, and demographic modifiers to quantify perceived threat. 
+	Follows the Health Belief Model framework.
+}
+
+variables {
+
+	personal my_race
+
+	#multiplication of risk ratios for sex, race, and age
+	personal my_demographicvar
+
+	#based on geographic locatiohn, number of new cases/week
+	personal my_susceptibilityvar
+
+	#number of deaths in the US/week
+	personal my_seriousnessvar
+	
+	#multiplication of my_demographicvar * my_susceptibilityvar * my_seriousnessvar
+	personal my_perceivedthreat
+
+	#lists to hold information read in from CSV files
+	global_list NewDeaths
+    global_list NewDeathsDates
+    global_list NewDeathsUnix
+    global_list NewDeathsNormalized
+
+    global_list JeffersonCases
+    global_list JeffersonCasesDates
+    global_list JeffersonCasesUnix
+    global_list JeffersonCasesNormalized
+
+    global current_new_deaths
+    current_new_deaths.output = 1
+    global death_index
+
+    global current_jefferson_cases
+    current_jefferson_cases.output = 1
+}
+
+parameters {
+    NewDeathsDates = read(./CSV_Files/Weekly/WeeklySeriousness.csv, 0)
+    NewDeaths = read(./CSV_Files/Weekly/WeeklySeriousness.csv, 1)
+    NewDeathsUnix = read(./CSV_Files/Weekly/WeeklySeriousness.csv, 2)
+    NewDeathsNormalized = read(./CSV_Files/Weekly/WeeklySeriousness.csv, 3)
+
+    JeffersonCasesDates = read(./CSV_Files/Weekly/WeeklySusceptibilityJefferson.csv, 0)
+    JeffersonCases = read(./CSV_Files/Weekly/WeeklySusceptibilityJefferson.csv, 1)
+    JeffersonCasesUnix = read(./CSV_Files/Weekly/WeeklySusceptibilityJefferson.csv, 2)
+    JeffersonCasesNormalized = read(./CSV_Files/Weekly/WeeklySusceptibilityJefferson.csv, 3)
+}
+
+condition PRECONTEMPLATION {
+
+	start_state = Start
+	admin_start_state = AdminStart
+	
+	state Start {
+		wait(1)
+		if (current_state_in_VACCINECONFIDENCE == VACCINECONFIDENCE.Precontemplation) then next(DemographicModifier)
+		default(Start)
+	}
+
+	state AdminStart {
+		#Things will break if you start on a day that isn't the first one the CSV
+		if (today<NewDeathsDates[0]) then current_new_deaths=0
+		wait(0)
+		if (today==NewDeathsDates[0]) then next(AdminCheck)
+		default(AdminStart)
+	}
+
+	state AdminCheck {
+		wait(24*7)
+		death_index = find_index(today, NewDeathsDates)
+		if(death_index != -1) then current_new_deaths = NewDeathsNormalized[death_index]
+		if(death_index != -1) then current_jefferson_cases = JeffersonCasesNormalized[death_index]
+		default(AdminCheck)
+	}
+
+
+	state DemographicModifier {
+		wait(0)
+
+		my_demographicvar = 0.60
+
+		if(race==african_american) then my_race=2
+		if(race==white) then my_race=1	
+		if(race==asian) then my_race=6	
+		if(race!=african_american & race!=white & race!=asian) then my_race=10
+
+		if (sex==male & my_race==2 & is_in_range(age,18,29)) then my_demographicvar = 0.716
+		if (sex==male & my_race==2 & is_in_range(age,30,49)) then my_demographicvar = 0.690
+		if (sex==male & my_race==2 & is_in_range(age,50,64)) then my_demographicvar = 0.781
+		if (sex==male & my_race==2 & is_in_range(age,65,120)) then my_demographicvar = 0.977
+
+		if (sex==female & my_race==2 & is_in_range(age,18,29)) then my_demographicvar = 0.578
+		if (sex==female & my_race==2 & is_in_range(age,30,49)) then my_demographicvar = 0.556
+		if (sex==female & my_race==2 & is_in_range(age,50,64)) then my_demographicvar = 0.630
+		if (sex==female & my_race==2 & is_in_range(age,65,120)) then my_demographicvar = 0.788
+
+		if (sex==male & my_race==1 & is_in_range(age,18,29)) then my_demographicvar = 1.041
+		if (sex==male & my_race==1 & is_in_range(age,30,49)) then my_demographicvar = 1.002
+		if (sex==male & my_race==1 & is_in_range(age,50,64)) then my_demographicvar = 1.135
+		if (sex==male & my_race==1 & is_in_range(age,65,120)) then my_demographicvar = 1.419
+
+		if (sex==female & my_race==1 & is_in_range(age,18,29)) then my_demographicvar = 0.839
+		if (sex==female & my_race==1 & is_in_range(age,30,49)) then my_demographicvar = 0.808
+		if (sex==female & my_race==1 & is_in_range(age,50,64)) then my_demographicvar = 0.915
+		if (sex==female & my_race==1 & is_in_range(age,65,120)) then my_demographicvar = 1.144
+
+		if (sex==male & my_race==6 & is_in_range(age,18,29)) then my_demographicvar = 1.415
+		if (sex==male & my_race==6 & is_in_range(age,30,49)) then my_demographicvar = 1.363
+		if (sex==male & my_race==6 & is_in_range(age,50,64)) then my_demographicvar = 1.543
+		if (sex==male & my_race==6 & is_in_range(age,65,120)) then my_demographicvar = 1.929
+
+		if (sex==female & my_race==6 & is_in_range(age,18,29)) then my_demographicvar = 1.141
+		if (sex==female & my_race==6 & is_in_range(age,30,49)) then my_demographicvar = 1.099
+		if (sex==female & my_race==6 & is_in_range(age,50,64)) then my_demographicvar = 1.245
+		if (sex==female & my_race==6 & is_in_range(age,65,120)) then my_demographicvar = 1.556
+
+		#other race is an average of black, white, and asian
+
+		if (sex==male & my_race==10 & is_in_range(age,18,29)) then my_demographicvar = 1.057
+		if (sex==male & my_race==10 & is_in_range(age,30,49)) then my_demographicvar = 1.018
+		if (sex==male & my_race==10 & is_in_range(age,50,64)) then my_demographicvar = 1.153
+		if (sex==male & my_race==10 & is_in_range(age,65,120)) then my_demographicvar = 1.441
+
+		if (sex==female & my_race==10 & is_in_range(age,18,29)) then my_demographicvar = 0.853
+		if (sex==female & my_race==10 & is_in_range(age,30,49)) then my_demographicvar = 0.821
+		if (sex==female & my_race==10 & is_in_range(age,50,64)) then my_demographicvar = 0.930
+		if (sex==female & my_race==10 & is_in_range(age,65,120)) then my_demographicvar = 1.162
+
+		#normalizing the demographic variable to be between 0 and 1; 1.929 is the demographicvar maximum
+		my_demographicvar = my_demographicvar/1.929
+
+		next(SusAndSer)
+ 
+	}
+
+	state SusAndSer {
+		wait(0)
+
+		#retrieve the number of deaths in US in the past week
+		my_seriousnessvar = current_new_deaths
+
+		#retrieve the number of new cases in the geographic location in the past week
+		my_susceptibilityvar = current_jefferson_cases
+
+		my_perceivedthreat = my_demographicvar*my_susceptibilityvar*my_seriousnessvar
+
+		next(ToContemplation)
+	}
+
+	state ToContemplation {
+		set_state(VACCINECONFIDENCE,Precontemplation,Contemplation)
+		wait(until(Sun,12am))
+		default(Start)
+	}
+}

@@ -1,0 +1,114 @@
+comment {
+	This model takes into account perceived benefits of action, perceived barriers of action
+	to quantify perceived empowerment. Follows the Health Belief Model framework.
+}
+
+variables {
+
+	#presidential approval rating/week
+	personal my_perceivedbenefits
+
+	#number of doses administered/week
+	personal my_perceivedbarriers
+	
+	#multiplication of my_perceivedbenefits * my_perceivedbarriers
+	personal my_perceivedempowerment
+
+	#multiplication of my_perceivedthreat * my_perceivedempowerment
+	personal my_vaccine_score
+
+	#lists to hold information read in from CSV files
+	global_list Approvals
+    global_list ApprovalDates
+    global_list ApprovalUnix
+
+    global_list DosesAdministered
+    global_list DosesAdministeredDates
+    global_list DosesAdministeredUnix
+    global_list DosesAdministeredNormalized
+
+    global current_approval
+    current_approval.output = 1
+    global approval_index
+
+    global current_doses_administered
+    current_doses_administered.output = 1
+}
+
+parameters {
+    ApprovalDates = read(./CSV_Files/Weekly/WeeklyBenefits.csv, 0)
+    Approvals = read(./CSV_Files/Weekly/WeeklyBenefits.csv, 1)
+    ApprovalUnix = read(./CSV_Files/Weekly/WeeklyBenefits.csv, 2)
+
+	DosesAdministeredDates = read(./CSV_Files/Weekly/WeeklyBarriers.csv, 0)
+    DosesAdministered = read(./CSV_Files/Weekly/WeeklyBarriers.csv, 1)
+    DosesAdministeredUnix = read(./CSV_Files/Weekly/WeeklyBarriers.csv, 2)
+    DosesAdministeredNormalized = read(./CSV_Files/Weekly/WeeklyBarriers.csv, 3)
+}
+
+condition CONTEMPLATION {
+
+	start_state = Start
+	admin_start_state = AdminStart
+	
+	state Start {
+		wait(1)
+		if (current_state_in_VACCINECONFIDENCE == VACCINECONFIDENCE.Contemplation) then next(Benefits)
+		default(Start)
+	}
+
+	state AdminStart {
+		if (today<ApprovalDates[0]) then current_approval=0
+		wait(0)
+		if (today==ApprovalDates[0]) then next(AdminCheck)
+		default(AdminStart)
+	}
+
+	state AdminCheck {
+		wait(24*7)
+		approval_index = find_index(today, ApprovalDates)
+		if(approval_index != -1) then current_approval = Approvals[approval_index]
+		if(approval_index != -1) then current_doses_administered = DosesAdministeredNormalized[approval_index]
+		default(AdminCheck)
+	}
+
+	state Benefits {
+		wait(0)
+
+		my_perceivedbenefits = current_approval
+
+		next(Barriers)
+		default(Excluded)
+	}
+
+	state Barriers {
+		wait(0)
+
+		my_perceivedbarriers = current_doses_administered
+
+		next(Empowerment)
+		default(Excluded)
+	}
+
+	state Empowerment {
+		wait(0)
+
+		my_perceivedempowerment = my_perceivedbenefits*my_perceivedbarriers
+		my_vaccine_score = my_perceivedthreat*my_perceivedempowerment
+
+		#centering on 0.5 means that half of agents have score above 0.5 and half below
+		#if agents are more inclined to get the vaccine, multiply by value >0.5
+		#if agents are less inclined to get the vaccine, multiply by value <0.5
+		my_vaccine_score = 0.5 * (my_vaccine_score/0.015859)
+		print_csv(Contemplation.csv,id,my_race,sex,age,my_vaccine_score)
+		next(ToPreparation)
+		default(Excluded)
+	}
+
+	state ToPreparation {
+		set_state(VACCINECONFIDENCE,Contemplation,Preparation)
+		wait(until(Sun,12am))
+		default(Start)
+	}
+
+}

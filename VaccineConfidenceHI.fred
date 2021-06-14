@@ -1,0 +1,30 @@
+comment {
+	This model sets the overall COVID-19 Vaccine Confidence trajectories by the structure of the transtheoretical model.
+}
+
+condition VACCINECONFIDENCE {
+
+	start_state = Precontemplation
+
+	state Precontemplation {
+		wait()
+		next()
+	}
+
+	state Contemplation {
+		wait()
+		next()
+	}
+
+	state Preparation {
+		set_state(ACCEPTEND,Check)
+		set_state(REFUSEEND,Check)
+		wait()
+		next()
+	}
+
+	state Action {
+		wait()
+		next()
+	}
+}

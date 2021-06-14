@@ -1,0 +1,16 @@
+comment {
+	This is the main model to run on Jefferson County, Pennsylvania.
+}
+
+simulation {
+	start_date = 2020-Dec-20
+	#to look at the vaccine propensities after the fist week, use end_date = 2020-Dec-26
+	#end_date = 2020-Dec-26
+	end_date = 2021-Mar-20
+	locations = Jefferson_County_PA
+}
+
+include VaccineConfidenceHI.fred
+include PrecontemplationHI.fred
+include ContemplationHI.fred
+include PreparationHI.fred

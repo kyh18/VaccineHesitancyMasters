@@ -1,0 +1,171 @@
+comment {
+	This model takes into account the vaccine hesitancy continuum and behavior as a transmittable factor.
+}
+
+variables {
+	#keeps a count of accept and refuse exposures
+	personal my_accept_exposures
+	personal my_refuse_exposures
+
+	#used to modify agent's susceptibility by a multipcative factor
+	personal my_accept_susceptibility
+	personal my_refuse_susceptibility
+
+	#accounts for an agent's accept susceptibility in determining probability to take the vaccine
+	personal my_take_vaccine_prob
+
+	#has value of 0 or 1 if vaccinated or not
+	personal my_vaccinated
+}
+
+condition ACCEPTEND {
+	exposed_state = Exposed
+	transmission_mode = proximity
+	transmissibility = 1
+
+	start_state = AcceptStart
+
+	state AcceptStart {
+		wait()
+		if (current_state_in_VACCINECONFIDENCE == VACCINECONFIDENCE.Preparation) then next(Check)
+		default(Excluded)
+	}
+
+	state Check {
+		#an agent's wsstarting susceptibility is a factor of their vaccine score
+		ACCEPTEND.sus = 1.0 * my_vaccine_score
+
+		#the maximum susceptibility value is 1
+		if(ACCEPTEND.sus>1) then ACCEPTEND.sus = 1
+
+		#transmissibility is equal to susceptibility
+		ACCEPTEND.trans = ACCEPTEND.sus
+		my_take_vaccine_prob = ACCEPTEND.sus
+		wait()
+		default()
+	}
+
+	state Exposed {
+		my_accept_exposures = my_accept_exposures + 1
+		wait(0)
+
+		#needs 3 exposures before modifying the susceptibility/transmissibility values; this number can be higher/lower dependent on your study
+		if(my_accept_exposures<3) then next(Wait)
+		default(ChangeSusceptibility)
+	}
+
+	state ChangeSusceptibility {
+		#modifying factor for susceptibility/transmissibility, taking into account accept and refuse exposures
+		my_accept_susceptibility = (my_accept_exposures / (my_accept_exposures + my_refuse_exposures)) * 2
+		ACCEPTEND.sus = ACCEPTEND.sus * (my_accept_susceptibility)
+		if(ACCEPTEND.sus>1) then ACCEPTEND.sus = 1
+		ACCEPTEND.trans = ACCEPTEND.sus
+
+		#calculates the reciprocal condition values as well
+		REFUSEEND.sus = 1 - ACCEPTEND.sus
+		REFUSEEND.trans = REFUSEEND.sus
+		wait(0)
+		next(Wait)
+	}
+
+	state Wait {
+		my_take_vaccine_prob = ACCEPTEND.sus
+
+		#agents can still be exposed during this time
+		wait(until(Sun,12am))
+		default(Choose)
+	}
+
+	state Choose {
+		wait(0)
+
+		#at the end of every week, each agent decides to take the vaccine with my_take_vaccine_prob
+		next(TakeVaccine) with prob(my_take_vaccine_prob)
+		default(SendToPrecontemplation)
+	}
+
+	state TakeVaccine {
+		#still transmissible for the accept condition, but everything else turned off
+		ACCEPTEND.sus = 0
+		REFUSEEND.sus = 0
+		REFUSEEND.trans = 0
+		my_vaccinated=1
+		wait()
+		next()
+	}
+
+	state SendToPrecontemplation {
+		set_state(VACCINECONFIDENCE,Preparation,Precontemplation)
+		wait(0)
+		next(AcceptStart)
+	}
+}
+
+
+condition REFUSEEND {
+	exposed_state = Exposed
+	transmission_mode = proximity
+	transmissibility = 1
+
+	start_state = RefuseStart
+
+	state RefuseStart {
+		wait()
+		if (current_state_in_VACCINECONFIDENCE == VACCINECONFIDENCE.Preparation) then next(Check)
+		default(Excluded)
+	}
+
+	state Check {
+		#your refuse susceptibility is higher if your vaccine score is lower
+		REFUSEEND.sus = 1-(1.0 * my_vaccine_score)
+		REFUSEEND.trans = REFUSEEND.sus
+		wait()
+		default()
+	}
+
+	state Exposed {
+		my_refuse_exposures = my_refuse_exposures + 1
+		wait(0)
+
+		#needs 3 exposures before modifying the susceptibility/transmissibility values; this number can be higher/lower dependent on your study
+		if(my_refuse_exposures<3) then next(Wait)
+		default(ChangeSusceptibility)
+	}
+
+	state ChangeSusceptibility {
+		my_refuse_susceptibility = (my_refuse_exposures / (my_accept_exposures + my_refuse_exposures)) * 2
+		REFUSEEND.sus = REFUSEEND.sus * my_refuse_susceptibility
+		if(REFUSEEND.sus>1) then REFUSEEND.sus = 1
+		REFUSEEND.trans = REFUSEEND.sus
+		ACCEPTEND.sus = 1 - REFUSEEND.sus
+		ACCEPTEND.trans = ACCEPTEND.sus
+		wait(0)
+		next(Wait)
+	}	
+
+	state Wait {
+		wait(until(Sun,12am))
+		if (day_of_week == 0 & hour == 0) then next(RefuseStart)
+		default(Wait)
+	}
+}
+
+#personal variable that tracks
+condition TRACKER {
+
+	start_state = Start
+
+	state Start {
+		if(id != 124167105 & id != 140762471 & id != 140788734 & id != 140880123) then next(Excluded)
+		#if(id != 176855814) then next(Excluded)
+		wait(2)
+		default(Check)
+	}
+
+	state Check {
+		wait(24)
+		#print_csv(Tracker.csv,id,today,ACCEPTEND.sus,ACCEPTEND.trans,REFUSEEND.sus,REFUSEEND.trans)
+		print_csv(Tracker.csv,id,today,my_vaccine_score,ACCEPTEND.sus,REFUSEEND.sus,my_accept_exposures,my_refuse_exposures,my_take_vaccine_prob,my_vaccinated)
+		next()
+	}
+}
