@@ -1,0 +1,45 @@
+# include data models and modules
+!/data
+!/models
+!/modules
+
+# exclude temporary files
+**/OLD/
+**/OUT/
+**/*~
+
+# exclude gnuplot
+**/*.plt
+
+# ignore file that start with period
+**/\.*
+
+# include the .gitignore file
+!.gitignore
+
+# FRED
+OUT/
+
+# Compiler
+*.FRED_compiler/
+
+# Python
+*.ipynb_checkpoints/
+*.npy
+
+# figures
+*.png
+*.pdf
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Mac OSX
+.DS_Store
+
+# exclude figures
+*.pdf
+*.png
+*.plt
